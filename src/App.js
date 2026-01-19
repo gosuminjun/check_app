@@ -1,5 +1,15 @@
+
 import "./App.css";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { db } from "./firebase";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  updateDoc,
+  getDocs,
+} from "firebase/firestore";
 
 function App() {
   // 사람 리스트 관리
@@ -21,7 +31,36 @@ function App() {
     []
   );
 
-  const [people, setPeople] = useState(initialPeople);
+  const [people, setPeople] = useState([]);
+
+  useEffect(() => {
+  const colRef = collection(db, "people");
+
+  const unsub = onSnapshot(colRef, async (snap) => {
+    // ✅ 처음 1번: DB에 사람이 12명 다 없으면 initialPeople로 채움
+    if (snap.size < initialPeople.length) {
+      // 현재 DB에 있는 id 목록
+      const existingIds = new Set(snap.docs.map((d) => Number(d.id)));
+
+      const missing = initialPeople.filter((p) => !existingIds.has(p.id));
+
+      await Promise.all(
+        missing.map((p) => setDoc(doc(colRef, String(p.id)), p, { merge: true }))
+      );
+    }
+
+    // ✅ 실시간 반영
+    const list = snap.docs
+      .map((d) => d.data())
+      .sort((a, b) => a.id - b.id);
+
+    setPeople(list);
+  });
+
+  return () => unsub();
+  }, [initialPeople]);
+
+
 
   // 오늘 날짜
   const formattedDate = new Date().toLocaleDateString("ko-KR", {
@@ -34,39 +73,40 @@ function App() {
   const mealPeople = useMemo(() => people.filter((p) => !p.onTrip), [people]);
   const tripPeople = useMemo(() => people.filter((p) => p.onTrip), [people]);
 
+  
   // 먹겠다 토글 (출장자는 토글할 필요 없음)
-  const toggleWillEat = (id) => {
-    setPeople((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, willEat: !p.willEat } : p
-      )
-    );
-  };
+  const toggleWillEat = async (id, currentWillEat) => {
+    await updateDoc(doc(db, "people", String(id)), {
+    willEat: !currentWillEat,
+  });
+};
 
   // 출장 시 식사 여부는 false로 변경
-  const goTrip = (id) => {
-    setPeople((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, onTrip: true, willEat: false } : p
-      )
-    );
+  const goTrip = async (id) => {
+  await updateDoc(doc(db, "people", String(id)), {
+    onTrip: true,
+    willEat: false,
+    });
   };
 
+
   // 출장 복귀 시 다시 식사 리스트로 이동
-  const returnFromTrip = (id) => {
-    setPeople((prev) =>
-      prev.map((p) =>
-        p.id === id ? { ...p, onTrip: false } : p
-      )
-    );
+  const returnFromTrip = async (id) => {
+  await updateDoc(doc(db, "people", String(id)), {
+      onTrip: false,
+    });
   };
 
   // 식사 대상을 기준으로 먹겠다 전체 초기화
-  const resetAllWillEat = () => {
-    setPeople((prev) =>
-      prev.map((p) => (p.onTrip ? p : { ...p, willEat: false }))
-    );
-  };
+  const resetAllWillEat = async () => {
+  await Promise.all(
+    people
+      .filter((p) => !p.onTrip)
+      .map((p) =>
+        updateDoc(doc(db, "people", String(p.id)), { willEat: false })
+      )
+  );
+};
 
   // 식사 인원 체크
   const willEatCount = useMemo(
@@ -77,8 +117,8 @@ function App() {
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
       <h1 style={{ marginBottom: 6 }}>오늘 먹을 사람 체크</h1>
+      <h1 style={{ fontSize: 6, opacity: 0.5,marginBottom: 6 }}>빌드 v2</h1>
       <div style={{ opacity: 0.7, marginBottom: 18 }}>{formattedDate}</div>
-
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
         <button onClick={resetAllWillEat}>먹겠다 전체 초기화</button>
         <span style={{ opacity: 0.7 }}>출장자는 식사 인원 계산에서 제외됨</span>
@@ -119,7 +159,7 @@ function App() {
 
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <button onClick={() => goTrip(p.id)}>출장</button>
-                  <button onClick={() => toggleWillEat(p.id)}>
+                  <button onClick={() => toggleWillEat(p.id, p.willEat)}>
                     {p.willEat ? "안먹어요" : "먹어요"}
                   </button>
                 </div>
