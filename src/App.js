@@ -114,24 +114,9 @@ function App() {
     [mealPeople]
   );
 
-  async function copyCollection() {
-  const snapshot = await getDocs(collection(db, "people"));
-
-  for (const document of snapshot.docs) {
-    await setDoc(
-      doc(db, "lab", document.id),
-      document.data()
-    );
-  }
-
-  alert("복사 완료!");
-}
-
-
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
       <h1 style={{ marginBottom: 6 }}>오늘 먹을 사람 체크</h1>
-      <button onClick={copyCollection}>people → people2 복사</button>
       <h1 style={{ fontSize: 6, opacity: 0.5,marginBottom: 6 }}>빌드 v3</h1>
       <div style={{ opacity: 0.7, marginBottom: 18 }}>{formattedDate}</div>
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
