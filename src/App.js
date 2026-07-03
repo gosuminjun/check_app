@@ -8,33 +8,27 @@ import {
   onSnapshot,
   setDoc,
   updateDoc,
-  getDocs,
 } from "firebase/firestore";
 
 function App() {
   // 사람 리스트 관리
   const initialPeople = useMemo(
     () => [
-      { id: 1, name: "오세진", willEat: false, onTrip: false },
-      { id: 2, name: "이철호", willEat: false, onTrip: false },
-      { id: 3, name: "박문권", willEat: false, onTrip: false },
-      { id: 4, name: "손길상", willEat: false, onTrip: false },
-      { id: 5, name: "이은미", willEat: false, onTrip: false },
-      { id: 6, name: "이경연", willEat: false, onTrip: false },
-      { id: 7, name: "김서훈", willEat: false, onTrip: false },
-      { id: 8, name: "이고은", willEat: false, onTrip: false },
-      { id: 9, name: "전우현", willEat: false, onTrip: false },
-      { id: 10, name: "오민준", willEat: false, onTrip: false },
-      { id: 11, name: "이정원", willEat: false, onTrip: false },
-      { id: 12, name: "심민호", willEat: false, onTrip: false },
     ],
     []
   );
 
   const [people, setPeople] = useState([]);
+  const [currentCollection, setCurrentCollection] = useState("people");
+
+  const [counts, setCounts] = useState({
+    total: 0,
+    people: 0,
+    lab: 0,
+  });
 
   useEffect(() => {
-  const colRef = collection(db, "people");
+  const colRef = collection(db, currentCollection);
 
   const unsub = onSnapshot(colRef, async (snap) => {
     // ✅ 처음 1번: DB에 사람이 12명 다 없으면 initialPeople로 채움
@@ -58,9 +52,41 @@ function App() {
   });
 
   return () => unsub();
-  }, [initialPeople]);
+  }, [initialPeople, currentCollection]);
 
+  useEffect(() => {
+    const calcCount = (snap) =>
+      snap.docs.filter((d) => {
+        const data = d.data();
+        return data.willEat === true && data.onTrip !== true;
+      }).length;
 
+    let peopleCount = 0;
+    let labCount = 0;
+
+    const unsubPeople = onSnapshot(collection(db, "people"), (snap) => {
+      peopleCount = calcCount(snap);
+      setCounts({
+        people: peopleCount,
+        lab: labCount,
+        total: peopleCount + labCount,
+      });
+    });
+
+    const unsubLab = onSnapshot(collection(db, "lab"), (snap) => {
+      labCount = calcCount(snap);
+      setCounts({
+        people: peopleCount,
+        lab: labCount,
+        total: peopleCount + labCount,
+      });
+    });
+
+    return () => {
+      unsubPeople();
+      unsubLab();
+    };
+  }, []);
 
   // 오늘 날짜
   const formattedDate = new Date().toLocaleDateString("ko-KR", {
@@ -76,14 +102,14 @@ function App() {
   
   // 먹겠다 토글 (출장자는 토글할 필요 없음)
   const toggleWillEat = async (id, currentWillEat) => {
-    await updateDoc(doc(db, "people", String(id)), {
+    await updateDoc(doc(db, currentCollection, String(id)), {
     willEat: !currentWillEat,
   });
 };
 
   // 출장 시 식사 여부는 false로 변경
   const goTrip = async (id) => {
-  await updateDoc(doc(db, "people", String(id)), {
+  await updateDoc(doc(db, currentCollection, String(id)), {
     onTrip: true,
     willEat: false,
     });
@@ -92,7 +118,7 @@ function App() {
 
   // 출장 복귀 시 다시 식사 리스트로 이동
   const returnFromTrip = async (id) => {
-  await updateDoc(doc(db, "people", String(id)), {
+  await updateDoc(doc(db, currentCollection, String(id)), {
       onTrip: false,
     });
   };
@@ -103,30 +129,40 @@ function App() {
     people
       .filter((p) => !p.onTrip)
       .map((p) =>
-        updateDoc(doc(db, "people", String(p.id)), { willEat: false })
-      )
-  );
-};
-
-  // 식사 인원 체크
-  const willEatCount = useMemo(
-    () => mealPeople.filter((p) => p.willEat).length,
-    [mealPeople]
-  );
+        updateDoc(doc(db, currentCollection, String(p.id)), { willEat: false })
+        )
+    );
+  };
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ marginBottom: 6 }}>프로젝트팀</h1>
-      
-      {/* ✅ 식사 인원 문구 */}
-      <div style={{ marginTop: 10, fontSize: 16 }}>
-        {formattedDate} 식사 인원은 <strong>{willEatCount}</strong>명 입니다.
+      <h1 style={{ marginBottom: 6 }}>
+        {currentCollection === "people" ? "프로젝트팀" : "기술연구소"}
+      </h1>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <button onClick={() => setCurrentCollection("people")}>
+          프로젝트팀
+        </button>
+        <button onClick={() => setCurrentCollection("lab")}>
+          기술연구소
+        </button>
       </div>
-      
-      <div style={{ opacity: 0.7, marginBottom: 18 }}>{formattedDate}</div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
-        <button onClick={resetAllWillEat}>먹겠다 전체 초기화</button>
-        <span style={{ opacity: 0.7 }}>출장자는 식사 인원 계산에서 제외됨</span>
+          
+      {/* ✅ 식사 인원 문구 */}
+      <div style={{ marginTop: 10, fontSize: 20 }}>
+        {formattedDate} 식사 인원은 <strong>{counts.total}</strong>명 입니다.
+      </div>
+
+      <div style={{ marginTop: 6, fontSize: 15, opacity: 0.8 }}>
+        프로젝트팀: <strong>{counts.people}</strong>명 / 기술연구소:{" "}
+        <strong>{counts.lab}</strong>명
+      </div>
+
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10 }}>
+        <button onClick={resetAllWillEat}>초기화</button>
+        <span style={{fontSize : 14}}>오늘의 인원 체크 후 초기화 버튼을 눌러주세요.</span>
       </div>
 
       {/* ✅ 원래 리스트(식사 대상) */}
@@ -178,6 +214,10 @@ function App() {
       <section style={{ marginTop: 26 }}>
         <h2 style={{ margin: "14px 0 10px" }}>출장 간 인원</h2>
 
+      <div style={{ opacity: 0.7, fontSize: 14, marginTop: 10, marginBottom: 10}}>
+        출장자는 식사 인원 계산에서 제외됩니다.
+      </div>
+
         {tripPeople.length === 0 ? (
           <div style={{ opacity: 0.7 }}>출장 중인 인원이 없습니다.</div>
         ) : (
@@ -201,10 +241,6 @@ function App() {
             ))}
           </ul>
         )}
-
-        <div style={{ marginTop: 10, opacity: 0.7, fontSize: 14 }}>
-          출장 인원은 먹겠다/안먹겠다를 고려하지 않습니다.
-        </div>
       </section>
     </div>
   );
