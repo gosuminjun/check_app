@@ -231,7 +231,7 @@ function App() {
               >
                 {/* 왼쪽: 출장 버튼 + 이름/상태 */}
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", flexDirection: "column", gap: 6 }}>
                     <strong style={{ fontSize: 16 }}>{p.name}</strong>
 
                     {p.willEat ? (
@@ -241,6 +241,7 @@ function App() {
                           alignItems: "center",
                           gap: 6,
                           width: "90px",
+                          height: "20px",
                           padding: "6px 6px",
                           borderRadius: 12,
                           fontWeight: 700,
@@ -262,9 +263,11 @@ function App() {
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
+                          justifyContent: "center",
                           gap: 6,
-                          // width: "fit-content",
-                          padding: "6px 14px",
+                          width: "90px",
+                          height: "20px",                          
+                          padding: "6px 6px",
                           borderRadius: 12,
                           background: "#F3F4F6",
                           color: "#374151",
