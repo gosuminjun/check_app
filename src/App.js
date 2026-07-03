@@ -101,17 +101,32 @@ function App() {
 
   
   // 먹겠다 토글 (출장자는 토글할 필요 없음)
-  const toggleWillEat = async (id, currentWillEat) => {
-    await updateDoc(doc(db, currentCollection, String(id)), {
-    willEat: !currentWillEat,
+//   const toggleWillEat = async (id, currentWillEat) => {
+//     await updateDoc(doc(db, currentCollection, String(id)), {
+//     willEat: !currentWillEat,
+//   });
+// };
+
+  const selectMeal = async (id, mealType) => {
+  await updateDoc(doc(db, currentCollection, String(id)), {
+    willEat: true,
+    mealType: mealType,
   });
 };
+
+  const cancelMeal = async (id) => {
+    await updateDoc(doc(db, currentCollection, String(id)), {
+      willEat: false,
+      mealType: "",
+    });
+  };
 
   // 출장 시 식사 여부는 false로 변경
   const goTrip = async (id) => {
   await updateDoc(doc(db, currentCollection, String(id)), {
     onTrip: true,
     willEat: false,
+    mealType: "",
     });
   };
 
@@ -129,7 +144,7 @@ function App() {
     people
       .filter((p) => !p.onTrip)
       .map((p) =>
-        updateDoc(doc(db, currentCollection, String(p.id)), { willEat: false })
+        updateDoc(doc(db, currentCollection, String(p.id)), { willEat: false, mealType: ""})
         )
     );
   };
@@ -192,16 +207,26 @@ function App() {
 
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <strong>{p.name}</strong>
-                    <span style={{ fontSize: 14, opacity: 0.75 }}>
-                      {p.willEat ? "먹어요 ✅" : "안먹어요 ❌"}
-                    </span>
+                    <div style={{fontSize: 14}}>
+                    {p.willEat
+                    ? p.mealType === "salad"
+                      ? "샐러드 🥬"
+                      : "일반식 🍽️"
+                    : "안먹어요 ❌"}
+                    </div>
                   </div>
                 </div>
 
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <button onClick={() => goTrip(p.id)}>출장</button>
-                  <button onClick={() => toggleWillEat(p.id, p.willEat)}>
-                    {p.willEat ? "안먹어요" : "먹어요"}
+                  <button onClick={() => goTrip(p.id)}>출장✈️</button>|
+                  <button onClick={() => selectMeal(p.id, "normal")}>
+                    일반식🍽️
+                  </button>
+                  <button onClick={() => selectMeal(p.id, "salad")}>
+                    샐러드🥬
+                  </button>
+                  <button onClick={() => cancelMeal(p.id)}>
+                    안먹어요❌
                   </button>
                 </div>
               </li>
