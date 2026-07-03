@@ -25,6 +25,8 @@ function App() {
     total: 0,
     people: 0,
     lab: 0,
+    normal: 0,
+    salad: 0,
   });
 
   useEffect(() => {
@@ -55,38 +57,57 @@ function App() {
   }, [initialPeople, currentCollection]);
 
   useEffect(() => {
-    const calcCount = (snap) =>
-      snap.docs.filter((d) => {
-        const data = d.data();
-        return data.willEat === true && data.onTrip !== true;
-      }).length;
+  const getStats = (snap) => {
+    const docs = snap.docs.map((d) => d.data());
 
-    let peopleCount = 0;
-    let labCount = 0;
-
-    const unsubPeople = onSnapshot(collection(db, "people"), (snap) => {
-      peopleCount = calcCount(snap);
-      setCounts({
-        people: peopleCount,
-        lab: labCount,
-        total: peopleCount + labCount,
-      });
-    });
-
-    const unsubLab = onSnapshot(collection(db, "lab"), (snap) => {
-      labCount = calcCount(snap);
-      setCounts({
-        people: peopleCount,
-        lab: labCount,
-        total: peopleCount + labCount,
-      });
-    });
-
-    return () => {
-      unsubPeople();
-      unsubLab();
+    return {
+      total: docs.filter((d) => d.willEat && !d.onTrip).length,
+      normal: docs.filter(
+        (d) => d.willEat && !d.onTrip && d.mealType === "normal"
+      ).length,
+      salad: docs.filter(
+        (d) => d.willEat && !d.onTrip && d.mealType === "salad"
+      ).length,
     };
-  }, []);
+  };
+
+  let peopleStats = {
+    total: 0,
+    normal: 0,
+    salad: 0,
+  };
+
+  let labStats = {
+    total: 0,
+    normal: 0,
+    salad: 0,
+  };
+
+  const updateCounts = () => {
+    setCounts({
+      people: peopleStats.total,
+      lab: labStats.total,
+      total: peopleStats.total + labStats.total,
+      normal: peopleStats.normal + labStats.normal,
+      salad: peopleStats.salad + labStats.salad,
+    });
+  };
+
+  const unsubPeople = onSnapshot(collection(db, "people"), (snap) => {
+    peopleStats = getStats(snap);
+    updateCounts();
+  });
+
+  const unsubLab = onSnapshot(collection(db, "lab"), (snap) => {
+    labStats = getStats(snap);
+    updateCounts();
+  });
+
+  return () => {
+    unsubPeople();
+    unsubLab();
+  };
+}, []);
 
   // 오늘 날짜
   const formattedDate = new Date().toLocaleDateString("ko-KR", {
@@ -169,6 +190,12 @@ function App() {
         {formattedDate} 식사 인원은 <strong>{counts.total}</strong>명 입니다.
       </div>
 
+      <div style={{ marginTop: 6, fontSize: 15 }}>
+  🍚 일반식 : <strong>{counts.normal}</strong>명
+  {" / "}
+  🥗 샐러드 : <strong>{counts.salad}</strong>명
+</div>
+
       <div style={{ marginTop: 6, fontSize: 15, opacity: 0.8 }}>
         프로젝트팀: <strong>{counts.people}</strong>명 / 기술연구소:{" "}
         <strong>{counts.lab}</strong>명
@@ -204,26 +231,60 @@ function App() {
               >
                 {/* 왼쪽: 출장 버튼 + 이름/상태 */}
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <strong style={{ fontSize: 16 }}>{p.name}</strong>
 
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <strong>{p.name}</strong>
-                    <div style={{fontSize: 14}}>
-                    {p.willEat
-                    ? p.mealType === "salad"
-                      ? "샐러드 🥬"
-                      : "일반식 🍽️"
-                    : "안먹어요 ❌"}
-                    </div>
+                    {p.willEat ? (
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          width: "90px",
+                          padding: "6px 6px",
+                          borderRadius: 12,
+                          fontWeight: 700,
+                          fontSize: 16,
+                          background:
+                            p.mealType === "salad" ? "#DCFCE7" : "#FCE7F3",
+                          color:
+                            p.mealType === "salad" ? "#15803D" : "#DB2777",
+                        }}
+                      >
+                        <span style={{ fontSize: 18 }}>
+                          {p.mealType === "salad" ? "🥗" : "🍚"}
+                        </span>
+
+                        {p.mealType === "salad" ? "샐러드" : "일반식"}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          // width: "fit-content",
+                          padding: "6px 14px",
+                          borderRadius: 12,
+                          background: "#F3F4F6",
+                          color: "#374151",
+                          fontWeight: 700,
+                          fontSize: 16,
+                        }}
+                      >
+                        ❌ 
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                   <button onClick={() => goTrip(p.id)}>출장✈️</button>|
                   <button onClick={() => selectMeal(p.id, "normal")}>
-                    일반식🍽️
+                    일반식🍚
                   </button>
                   <button onClick={() => selectMeal(p.id, "salad")}>
-                    샐러드🥬
+                    샐러드🥗
                   </button>
                   <button onClick={() => cancelMeal(p.id)}>
                     안먹어요❌
