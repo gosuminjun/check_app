@@ -117,7 +117,12 @@ function App() {
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
       <h1 style={{ marginBottom: 6 }}>프로젝트팀</h1>
-      <h1 style={{ fontSize: 6, opacity: 0.5,marginBottom: 6 }}>빌드 v3</h1>
+      
+      {/* ✅ 식사 인원 문구 */}
+      <div style={{ marginTop: 10, fontSize: 16 }}>
+        {formattedDate} 식사 인원은 <strong>{willEatCount}</strong>명 입니다.
+      </div>
+      
       <div style={{ opacity: 0.7, marginBottom: 18 }}>{formattedDate}</div>
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
         <button onClick={resetAllWillEat}>먹겠다 전체 초기화</button>
@@ -168,11 +173,6 @@ function App() {
           </ul>
         )}
       </section>
-
-      {/* ✅ 식사 인원 문구 */}
-      <div style={{ marginTop: 10, fontSize: 16 }}>
-        {formattedDate} 식사 인원은 <strong>{willEatCount}</strong>명 입니다.
-      </div>
 
       {/* ✅ 출장 인원 리스트 */}
       <section style={{ marginTop: 26 }}>
