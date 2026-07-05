@@ -1,6 +1,5 @@
-
 import "./App.css";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { db } from "./firebase";
 import {
   collection,
@@ -8,15 +7,20 @@ import {
   onSnapshot,
   setDoc,
   updateDoc,
+  getDoc,
+  getDocs,
 } from "firebase/firestore";
 
+const getTodayKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const date = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${date}`;
+};
+
 function App() {
-  // 사람 리스트 관리
-  const initialPeople = useMemo(
-    () => [
-    ],
-    []
-  );
+  const initialPeople = useMemo(() => [], []);
 
   const [people, setPeople] = useState([]);
   const [currentCollection, setCurrentCollection] = useState("people");
@@ -30,110 +34,89 @@ function App() {
   });
 
   useEffect(() => {
-  const colRef = collection(db, currentCollection);
+    const colRef = collection(db, currentCollection);
 
-  const unsub = onSnapshot(colRef, async (snap) => {
-    // ✅ 처음 1번: DB에 사람이 12명 다 없으면 initialPeople로 채움
-    if (snap.size < initialPeople.length) {
-      // 현재 DB에 있는 id 목록
-      const existingIds = new Set(snap.docs.map((d) => Number(d.id)));
+    const unsub = onSnapshot(colRef, async (snap) => {
+      if (snap.size < initialPeople.length) {
+        const existingIds = new Set(snap.docs.map((d) => Number(d.id)));
+        const missing = initialPeople.filter((p) => !existingIds.has(p.id));
 
-      const missing = initialPeople.filter((p) => !existingIds.has(p.id));
+        await Promise.all(
+          missing.map((p) =>
+            setDoc(doc(colRef, String(p.id)), p, { merge: true })
+          )
+        );
+      }
 
-      await Promise.all(
-        missing.map((p) => setDoc(doc(colRef, String(p.id)), p, { merge: true }))
-      );
-    }
+      const list = snap.docs
+        .map((d) => d.data())
+        .sort((a, b) => a.id - b.id);
 
-    // ✅ 실시간 반영
-    const list = snap.docs
-      .map((d) => d.data())
-      .sort((a, b) => a.id - b.id);
+      setPeople(list);
+    });
 
-    setPeople(list);
-  });
-
-  return () => unsub();
+    return () => unsub();
   }, [initialPeople, currentCollection]);
 
   useEffect(() => {
-  const getStats = (snap) => {
-    const docs = snap.docs.map((d) => d.data());
+    const getStats = (snap) => {
+      const docs = snap.docs.map((d) => d.data());
 
-    return {
-      total: docs.filter((d) => d.willEat && !d.onTrip).length,
-      normal: docs.filter(
-        (d) => d.willEat && !d.onTrip && d.mealType === "normal"
-      ).length,
-      salad: docs.filter(
-        (d) => d.willEat && !d.onTrip && d.mealType === "salad"
-      ).length,
+      return {
+        total: docs.filter((d) => d.willEat && !d.onTrip).length,
+        normal: docs.filter(
+          (d) => d.willEat && !d.onTrip && d.mealType === "normal"
+        ).length,
+        salad: docs.filter(
+          (d) => d.willEat && !d.onTrip && d.mealType === "salad"
+        ).length,
+      };
     };
-  };
 
-  let peopleStats = {
-    total: 0,
-    normal: 0,
-    salad: 0,
-  };
+    let peopleStats = { total: 0, normal: 0, salad: 0 };
+    let labStats = { total: 0, normal: 0, salad: 0 };
 
-  let labStats = {
-    total: 0,
-    normal: 0,
-    salad: 0,
-  };
+    const updateCounts = () => {
+      setCounts({
+        people: peopleStats.total,
+        lab: labStats.total,
+        total: peopleStats.total + labStats.total,
+        normal: peopleStats.normal + labStats.normal,
+        salad: peopleStats.salad + labStats.salad,
+      });
+    };
 
-  const updateCounts = () => {
-    setCounts({
-      people: peopleStats.total,
-      lab: labStats.total,
-      total: peopleStats.total + labStats.total,
-      normal: peopleStats.normal + labStats.normal,
-      salad: peopleStats.salad + labStats.salad,
+    const unsubPeople = onSnapshot(collection(db, "people"), (snap) => {
+      peopleStats = getStats(snap);
+      updateCounts();
     });
-  };
 
-  const unsubPeople = onSnapshot(collection(db, "people"), (snap) => {
-    peopleStats = getStats(snap);
-    updateCounts();
-  });
+    const unsubLab = onSnapshot(collection(db, "lab"), (snap) => {
+      labStats = getStats(snap);
+      updateCounts();
+    });
 
-  const unsubLab = onSnapshot(collection(db, "lab"), (snap) => {
-    labStats = getStats(snap);
-    updateCounts();
-  });
+    return () => {
+      unsubPeople();
+      unsubLab();
+    };
+  }, []);
 
-  return () => {
-    unsubPeople();
-    unsubLab();
-  };
-}, []);
-
-  // 오늘 날짜
   const formattedDate = new Date().toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
 
-  // 식사 대상(출장 아닌 사람)만
   const mealPeople = useMemo(() => people.filter((p) => !p.onTrip), [people]);
   const tripPeople = useMemo(() => people.filter((p) => p.onTrip), [people]);
 
-  
-  // 먹겠다 토글 (출장자는 토글할 필요 없음)
-//   const toggleWillEat = async (id, currentWillEat) => {
-//     await updateDoc(doc(db, currentCollection, String(id)), {
-//     willEat: !currentWillEat,
-//   });
-// };
-
   const selectMeal = async (id, mealType) => {
-  await updateDoc(doc(db, currentCollection, String(id)), {
-    willEat: true,
-    mealType: mealType,
-  });
-};
+    await updateDoc(doc(db, currentCollection, String(id)), {
+      willEat: true,
+      mealType,
+    });
+  };
 
   const cancelMeal = async (id) => {
     await updateDoc(doc(db, currentCollection, String(id)), {
@@ -142,33 +125,67 @@ function App() {
     });
   };
 
-  // 출장 시 식사 여부는 false로 변경
   const goTrip = async (id) => {
-  await updateDoc(doc(db, currentCollection, String(id)), {
-    onTrip: true,
-    willEat: false,
-    mealType: "",
+    await updateDoc(doc(db, currentCollection, String(id)), {
+      onTrip: true,
+      willEat: false,
+      mealType: "",
     });
   };
 
-
-  // 출장 복귀 시 다시 식사 리스트로 이동
   const returnFromTrip = async (id) => {
-  await updateDoc(doc(db, currentCollection, String(id)), {
+    await updateDoc(doc(db, currentCollection, String(id)), {
       onTrip: false,
     });
   };
 
-  // 식사 대상을 기준으로 먹겠다 전체 초기화
   const resetAllWillEat = async () => {
-  await Promise.all(
-    people
-      .filter((p) => !p.onTrip)
-      .map((p) =>
-        updateDoc(doc(db, currentCollection, String(p.id)), { willEat: false, mealType: ""})
+    await Promise.all(
+      people
+        .filter((p) => !p.onTrip)
+        .map((p) =>
+          updateDoc(doc(db, currentCollection, String(p.id)), {
+            willEat: false,
+            mealType: "",
+          })
         )
     );
   };
+
+  const autoResetIfNewDay = useCallback(async () => {
+    const todayKey = getTodayKey();
+    const metaRef = doc(db, "meta", "app");
+
+    const metaSnap = await getDoc(metaRef);
+    const lastResetDate = metaSnap.exists()
+      ? metaSnap.data().lastResetDate
+      : "";
+
+    if (lastResetDate === todayKey) return;
+
+    const collections = ["people", "lab"];
+
+    for (const collectionName of collections) {
+      const snap = await getDocs(collection(db, collectionName));
+
+      await Promise.all(
+        snap.docs.map((d) =>
+          updateDoc(doc(db, collectionName, d.id), {
+            willEat: false,
+            mealType: "",
+          })
+        )
+      );
+    }
+
+    await setDoc(metaRef, {
+      lastResetDate: todayKey,
+    });
+  }, []);
+
+  useEffect(() => {
+    autoResetIfNewDay();
+  }, [autoResetIfNewDay]);
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
@@ -184,17 +201,15 @@ function App() {
           기술연구소
         </button>
       </div>
-          
-      {/* ✅ 식사 인원 문구 */}
+
       <div style={{ marginTop: 10, fontSize: 20 }}>
         {formattedDate} 식사 인원은 <strong>{counts.total}</strong>명 입니다.
       </div>
 
       <div style={{ marginTop: 6, fontSize: 15 }}>
-  🍚 일반식 : <strong>{counts.normal}</strong>명
-  {" / "}
-  🥗 샐러드 : <strong>{counts.salad}</strong>명
-</div>
+        🍚 일반식 : <strong>{counts.normal}</strong>명{" / "}
+        🥗 샐러드 : <strong>{counts.salad}</strong>명
+      </div>
 
       <div style={{ marginTop: 6, fontSize: 15, opacity: 0.8 }}>
         프로젝트팀: <strong>{counts.people}</strong>명 / 기술연구소:{" "}
@@ -202,12 +217,7 @@ function App() {
       </div>
 
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 10 }}>
-        <button onClick={resetAllWillEat}>초기화</button>
-        <span style={{fontSize : 14}}>오늘의 인원 체크 후 초기화 버튼을 눌러주세요.</span>
-      </div>
 
-      {/* ✅ 원래 리스트(식사 대상) */}
       <section style={{ marginBottom: 22 }}>
         <h2 style={{ margin: "14px 0 10px" }}>식사 대상 리스트</h2>
 
@@ -229,9 +239,15 @@ function App() {
                   gap: 12,
                 }}
               >
-                {/* 왼쪽: 출장 버튼 + 이름/상태 */}
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", flexDirection: "column", gap: 6 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
                     <strong style={{ fontSize: 16 }}>{p.name}</strong>
 
                     {p.willEat ? (
@@ -239,6 +255,7 @@ function App() {
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
+                          justifyContent: "center",
                           gap: 6,
                           width: "90px",
                           height: "20px",
@@ -255,7 +272,6 @@ function App() {
                         <span style={{ fontSize: 18 }}>
                           {p.mealType === "salad" ? "🥗" : "🍚"}
                         </span>
-
                         {p.mealType === "salad" ? "샐러드" : "일반식"}
                       </div>
                     ) : (
@@ -264,9 +280,8 @@ function App() {
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: 6,
                           width: "90px",
-                          height: "20px",                          
+                          height: "20px",
                           padding: "6px 6px",
                           borderRadius: 12,
                           background: "#F3F4F6",
@@ -275,7 +290,7 @@ function App() {
                           fontSize: 16,
                         }}
                       >
-                        ❌ 
+                        ❌
                       </div>
                     )}
                   </div>
@@ -289,9 +304,7 @@ function App() {
                   <button onClick={() => selectMeal(p.id, "salad")}>
                     샐러드🥗
                   </button>
-                  <button onClick={() => cancelMeal(p.id)}>
-                    안먹어요❌
-                  </button>
+                  <button onClick={() => cancelMeal(p.id)}>안먹어요❌</button>
                 </div>
               </li>
             ))}
@@ -299,13 +312,19 @@ function App() {
         )}
       </section>
 
-      {/* ✅ 출장 인원 리스트 */}
       <section style={{ marginTop: 26 }}>
         <h2 style={{ margin: "14px 0 10px" }}>출장 간 인원</h2>
 
-      <div style={{ opacity: 0.7, fontSize: 14, marginTop: 10, marginBottom: 10}}>
-        출장자는 식사 인원 계산에서 제외됩니다.
-      </div>
+        <div
+          style={{
+            opacity: 0.7,
+            fontSize: 14,
+            marginTop: 10,
+            marginBottom: 10,
+          }}
+        >
+          출장자는 식사 인원 계산에서 제외됩니다.
+        </div>
 
         {tripPeople.length === 0 ? (
           <div style={{ opacity: 0.7 }}>출장 중인 인원이 없습니다.</div>
@@ -325,7 +344,9 @@ function App() {
                 }}
               >
                 <strong>{p.name}</strong>
-                <button onClick={() => returnFromTrip(p.id)}>출장 복귀</button>
+                <button onClick={() => returnFromTrip(p.id)}>
+                  출장 복귀
+                </button>
               </li>
             ))}
           </ul>
