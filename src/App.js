@@ -108,6 +108,10 @@ function App() {
     day: "numeric",
   });
 
+  const [canEdit, setCanEdit] = useState(new Date().getHours() < 9);
+  
+
+
   const mealPeople = useMemo(() => people.filter((p) => !p.onTrip), [people]);
   const tripPeople = useMemo(() => people.filter((p) => p.onTrip), [people]);
 
@@ -137,19 +141,6 @@ function App() {
     await updateDoc(doc(db, currentCollection, String(id)), {
       onTrip: false,
     });
-  };
-
-  const resetAllWillEat = async () => {
-    await Promise.all(
-      people
-        .filter((p) => !p.onTrip)
-        .map((p) =>
-          updateDoc(doc(db, currentCollection, String(p.id)), {
-            willEat: false,
-            mealType: "",
-          })
-        )
-    );
   };
 
   const autoResetIfNewDay = useCallback(async () => {
@@ -184,7 +175,16 @@ function App() {
   }, []);
 
   useEffect(() => {
-    autoResetIfNewDay();
+    const update = async () => {
+      setCanEdit(new Date().getHours() < 9);
+      await autoResetIfNewDay();
+    };
+
+    update();
+
+    const timer = setInterval(update, 60 * 1000);
+
+    return () => clearInterval(timer);
   }, [autoResetIfNewDay]);
 
   return (
@@ -216,11 +216,24 @@ function App() {
         <strong>{counts.lab}</strong>명
       </div>
 
+      {!canEdit && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: 10,
+            borderRadius: 8,
+            background: "#FEF3C7",
+            color: "#92400E",
+            fontWeight: 600,
+          }}
+        >
+          ⏰ 오전 9시 이후에는 식사 현황을 수정할 수 없습니다. ⏰
+        </div>
+      )}
 
 
-      <section style={{ marginBottom: 22 }}>
-        <h2 style={{ margin: "14px 0 10px" }}>식사 대상 리스트</h2>
 
+      <section style={{ marginTop:22, marginBottom: 22 }}>
         {mealPeople.length === 0 ? (
           <div style={{ opacity: 0.7 }}>현재 식사 대상자가 없습니다.</div>
         ) : (
@@ -297,14 +310,14 @@ function App() {
                 </div>
 
                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <button onClick={() => goTrip(p.id)}>출장✈️</button>|
-                  <button onClick={() => selectMeal(p.id, "normal")}>
+                  <button onClick={() => goTrip(p.id)} disabled={!canEdit}>출장✈️</button>|
+                  <button onClick={() => selectMeal(p.id, "normal")} disabled={!canEdit}>
                     일반식🍚
                   </button>
-                  <button onClick={() => selectMeal(p.id, "salad")}>
+                  <button onClick={() => selectMeal(p.id, "salad")} disabled={!canEdit}>
                     샐러드🥗
                   </button>
-                  <button onClick={() => cancelMeal(p.id)}>안먹어요❌</button>
+                  <button onClick={() => cancelMeal(p.id)} disabled={!canEdit}>안먹어요❌</button>
                 </div>
               </li>
             ))}
@@ -344,7 +357,7 @@ function App() {
                 }}
               >
                 <strong>{p.name}</strong>
-                <button onClick={() => returnFromTrip(p.id)}>
+                <button onClick={() => returnFromTrip(p.id)} disabled={!canEdit}>
                   출장 복귀
                 </button>
               </li>
