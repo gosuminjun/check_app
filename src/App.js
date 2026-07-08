@@ -110,8 +110,6 @@ function App() {
 
   const [canEdit, setCanEdit] = useState(new Date().getHours() < 9);
   
-
-
   const mealPeople = useMemo(() => people.filter((p) => !p.onTrip), [people]);
   const tripPeople = useMemo(() => people.filter((p) => p.onTrip), [people]);
 
@@ -143,7 +141,7 @@ function App() {
     });
   };
 
-  const autoResetIfNewDay = useCallback(async () => {
+  const autoResetNewDay = useCallback(async () => {
     const todayKey = getTodayKey();
     const metaRef = doc(db, "meta", "app");
 
@@ -177,7 +175,7 @@ function App() {
   useEffect(() => {
     const update = async () => {
       setCanEdit(new Date().getHours() < 9);
-      await autoResetIfNewDay();
+      await autoResetNewDay();
     };
 
     update();
@@ -185,7 +183,7 @@ function App() {
     const timer = setInterval(update, 60 * 1000);
 
     return () => clearInterval(timer);
-  }, [autoResetIfNewDay]);
+  }, [autoResetNewDay]);
 
   return (
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
