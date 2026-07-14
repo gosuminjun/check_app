@@ -214,6 +214,15 @@ function App() {
         <strong>{counts.lab}</strong>명
       </div>
 
+      <a
+        href="https://huglunch.kr/foodplan/"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="link-button"
+      >
+        식단 확인하기
+      </a>
+
       {!canEdit && (
         <div
           style={{
