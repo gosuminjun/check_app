@@ -267,8 +267,6 @@ function App() {
         style={{
           display: "flex",
           gap: 8,
-          // marginBottom: 20,
-          // paddingBottom: 14,
           opacity: 0
         }}
       >
@@ -394,16 +392,35 @@ function App() {
         </div>
       ) : (
         <>
-                <h1 style={{ marginBottom: 14 }}>
-        {TEAMS.find((team) => team.id === currentCollection)?.label}
-      </h1>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 10,
+          }}
+        >
+          <h1 style={{ margin: 0 }}>
+            {TEAMS.find((team) => team.id === currentCollection)?.label}
+          </h1>
+
+          <a
+            href="https://huglunch.kr/foodplan/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link-button"
+          >
+            식단 확인하기
+          </a>
+        </div>
 
       <div
         style={{
           display: "flex",
           flexWrap: "wrap",
           gap: 8,
-          marginBottom: 16,
+          marginBottom: 10,
         }}
       >
         {TEAMS.map((team) => (
@@ -416,11 +433,11 @@ function App() {
         ))}
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 20 }}>
+      <div style={{ marginBottom: 6, fontSize: 20 }}>
         {formattedDate} 식사 인원은 <strong>{counts.total}</strong>명 입니다.
       </div>
 
-      <div style={{ marginTop: 6, fontSize: 15 }}>
+      <div style={{ marginBottom: 6, fontSize: 15 }}>
         🍚 일반식 : <strong>{counts.normal}</strong>명{" / "}
         🥗 샐러드 : <strong>{counts.salad}</strong>명
       </div>
@@ -430,7 +447,7 @@ function App() {
           display: "flex",
           flexWrap: "wrap",
           gap: "6px 14px",
-          marginTop: 6,
+          marginBottom: 10,
           fontSize: 15,
           opacity: 0.8,
         }}
@@ -443,15 +460,6 @@ function App() {
         ))}
       </div>
 
-      <a
-        href="https://huglunch.kr/foodplan/"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="link-button"
-      >
-        식단 확인하기
-      </a>
-
       {!canEdit && (
         <div
           style={{
@@ -460,14 +468,13 @@ function App() {
             borderRadius: 8,
             background: "#FEF3C7",
             color: "#92400E",
+            textAlign: "center",
             fontWeight: 600,
           }}
         >
           ⏰ 오전 9시 이후에는 식사 현황을 수정할 수 없습니다. ⏰
         </div>
       )}
-
-
 
       <section style={{ marginTop:22, marginBottom: 22 }}>
         {mealPeople.length === 0 ? (
