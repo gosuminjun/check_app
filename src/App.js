@@ -7,6 +7,7 @@ import {
   onSnapshot,
   setDoc,
   updateDoc,
+  deleteDoc,
   getDoc,
   getDocs,
 } from "firebase/firestore";
@@ -19,6 +20,13 @@ const getTodayKey = () => {
   return `${year}-${month}-${date}`;
 };
 
+const TEAMS = [
+  { id: "people", label: "프로젝트팀" },
+  { id: "lab", label: "기술연구소" },
+  { id: "management", label: "대표이사/관리팀" },
+  { id: "qualityMarketing", label: "품질/마케팅" },
+];
+
 function App() {
   const initialPeople = useMemo(() => [], []);
 
@@ -27,11 +35,18 @@ function App() {
 
   const [counts, setCounts] = useState({
     total: 0,
-    people: 0,
-    lab: 0,
     normal: 0,
     salad: 0,
+    byTeam: {
+      people: 0,
+      lab: 0,
+      management: 0,
+      qualityMarketing: 0,
+    },
   });
+
+  const [currentPage, setCurrentPage] = useState("meal");
+  const [newPersonName, setNewPersonName] = useState("");
 
   useEffect(() => {
     const colRef = collection(db, currentCollection);
@@ -65,40 +80,56 @@ function App() {
       return {
         total: docs.filter((d) => d.willEat && !d.onTrip).length,
         normal: docs.filter(
-          (d) => d.willEat && !d.onTrip && d.mealType === "normal"
+          (d) =>
+            d.willEat &&
+            !d.onTrip &&
+            d.mealType === "normal"
         ).length,
         salad: docs.filter(
-          (d) => d.willEat && !d.onTrip && d.mealType === "salad"
+          (d) =>
+            d.willEat &&
+            !d.onTrip &&
+            d.mealType === "salad"
         ).length,
       };
     };
 
-    let peopleStats = { total: 0, normal: 0, salad: 0 };
-    let labStats = { total: 0, normal: 0, salad: 0 };
+    const teamStats = {};
 
     const updateCounts = () => {
+      const statsList = TEAMS.map(
+        (team) =>
+          teamStats[team.id] || {
+            total: 0,
+            normal: 0,
+            salad: 0,
+          }
+      );
+
+      const byTeam = Object.fromEntries(
+        TEAMS.map((team) => [
+          team.id,
+          teamStats[team.id]?.total || 0,
+        ])
+      );
+
       setCounts({
-        people: peopleStats.total,
-        lab: labStats.total,
-        total: peopleStats.total + labStats.total,
-        normal: peopleStats.normal + labStats.normal,
-        salad: peopleStats.salad + labStats.salad,
+        total: statsList.reduce((sum, stats) => sum + stats.total, 0),
+        normal: statsList.reduce((sum, stats) => sum + stats.normal, 0),
+        salad: statsList.reduce((sum, stats) => sum + stats.salad, 0),
+        byTeam,
       });
     };
 
-    const unsubPeople = onSnapshot(collection(db, "people"), (snap) => {
-      peopleStats = getStats(snap);
-      updateCounts();
-    });
-
-    const unsubLab = onSnapshot(collection(db, "lab"), (snap) => {
-      labStats = getStats(snap);
-      updateCounts();
-    });
+    const unsubscribers = TEAMS.map((team) =>
+      onSnapshot(collection(db, team.id), (snap) => {
+        teamStats[team.id] = getStats(snap);
+        updateCounts();
+      })
+    );
 
     return () => {
-      unsubPeople();
-      unsubLab();
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
   }, []);
 
@@ -152,7 +183,7 @@ function App() {
 
     if (lastResetDate === todayKey) return;
 
-    const collections = ["people", "lab"];
+    const collections = TEAMS.map((team) => team.id);
 
     for (const collectionName of collections) {
       const snap = await getDocs(collection(db, collectionName));
@@ -185,19 +216,204 @@ function App() {
     return () => clearInterval(timer);
   }, [autoResetNewDay]);
 
-  return (
+  const addPerson = async () => {
+    const trimmedName = newPersonName.trim();
+
+    if (!trimmedName) {
+      alert("이름을 입력해주세요.");
+      return;
+    }
+
+    const snap = await getDocs(collection(db, currentCollection));
+
+    const existingIds = snap.docs
+      .map((document) => Number(document.data().id))
+      .filter((id) => Number.isFinite(id));
+
+    const newId =
+      existingIds.length > 0
+        ? Math.max(...existingIds) + 1
+        : 1;
+
+    await setDoc(
+      doc(db, currentCollection, String(newId)),
+      {
+        id: newId,
+        name: trimmedName,
+        willEat: false,
+        mealType: "",
+        onTrip: false,
+      }
+    );
+
+    setNewPersonName("");
+  };
+
+  const removePerson = async (person) => {
+    const confirmed = window.confirm(
+      `${person.name} 님을 정말 삭제하시겠습니까?`
+    );
+
+    if (!confirmed) return;
+
+    await deleteDoc(
+      doc(db, currentCollection, String(person.id))
+    );
+  };
+
+  return ( 
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ marginBottom: 6 }}>
-        {currentCollection === "people" ? "프로젝트팀" : "기술연구소"}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          // marginBottom: 20,
+          // paddingBottom: 14,
+          opacity: 0
+        }}
+      >
+        <button onClick={() => setCurrentPage("meal")}>
+          식사 체크
+        </button>
+
+        <button onClick={() => setCurrentPage("admin")}>
+          인원 관리
+        </button>
+      </div>
+
+      {currentPage === "admin" ? (
+        <div>
+          <h1>인원 관리</h1>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginBottom: 20,
+            }}
+          >
+            {TEAMS.map((team) => (
+              <button
+                key={team.id}
+                onClick={() => setCurrentCollection(team.id)}
+              >
+                {team.label}
+              </button>
+            ))}
+          </div>
+
+          <h2>
+            {TEAMS.find(
+              (team) => team.id === currentCollection
+            )?.label}
+          </h2>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 20,
+            }}
+          >
+            <input
+              type="text"
+              value={newPersonName}
+              onChange={(event) =>
+                setNewPersonName(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  addPerson();
+                }
+              }}
+              placeholder="추가할 사람 이름"
+              style={{
+                flex: 1,
+                padding: "10px 12px",
+                border: "1px solid #d1d5db",
+                borderRadius: 8,
+                fontSize: 16,
+              }}
+            />
+
+            <button onClick={addPerson}>
+              인원 추가
+            </button>
+          </div>
+
+          {people.length === 0 ? (
+            <div>등록된 인원이 없습니다.</div>
+          ) : (
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              {people.map((person) => (
+                <li
+                  key={person.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "12px 14px",
+                    marginBottom: 8,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 10,
+                  }}
+                >
+                  <div>
+                    <strong>{person.name}</strong>
+
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 13,
+                        opacity: 0.6,
+                      }}
+                    >
+                      ID: {person.id}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => removePerson(person)}
+                    style={{
+                      color: "#b91c1c",
+                    }}
+                  >
+                    삭제
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <>
+                <h1 style={{ marginBottom: 14 }}>
+        {TEAMS.find((team) => team.id === currentCollection)?.label}
       </h1>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button onClick={() => setCurrentCollection("people")}>
-          프로젝트팀
-        </button>
-        <button onClick={() => setCurrentCollection("lab")}>
-          기술연구소
-        </button>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          marginBottom: 16,
+        }}
+      >
+        {TEAMS.map((team) => (
+          <button
+            key={team.id}
+            onClick={() => setCurrentCollection(team.id)}
+          >
+            {team.label}
+          </button>
+        ))}
       </div>
 
       <div style={{ marginTop: 10, fontSize: 20 }}>
@@ -209,9 +425,22 @@ function App() {
         🥗 샐러드 : <strong>{counts.salad}</strong>명
       </div>
 
-      <div style={{ marginTop: 6, fontSize: 15, opacity: 0.8 }}>
-        프로젝트팀: <strong>{counts.people}</strong>명 / 기술연구소:{" "}
-        <strong>{counts.lab}</strong>명
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px 14px",
+          marginTop: 6,
+          fontSize: 15,
+          opacity: 0.8,
+        }}
+      >
+        {TEAMS.map((team) => (
+          <span key={team.id}>
+            {team.label}:{" "}
+            <strong>{counts.byTeam[team.id] || 0}</strong>명
+          </span>
+        ))}
       </div>
 
       <a
@@ -372,6 +601,8 @@ function App() {
           </ul>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }
