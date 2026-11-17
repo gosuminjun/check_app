@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -25,6 +26,36 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>MBE 점심 체크</title>
+
+    <!-- 기존 PWA Service Worker 등록 해제 -->
+    <script>
+      (function () {
+        if (!("serviceWorker" in navigator)) return;
+
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            return Promise.all(
+              registrations
+                .filter(function (registration) {
+                  return registration.scope.startsWith(
+                    location.origin + "/check_app/"
+                  );
+                })
+                .map(function (registration) {
+                  return registration.unregister();
+                })
+            );
+          })
+          .then(function (results) {
+            if (results.some(Boolean)) {
+              console.log("기존 Service Worker 등록 해제 완료");
+            }
+          })
+          .catch(function (error) {
+            console.error("Service Worker 정리 실패:", error);
+          });
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

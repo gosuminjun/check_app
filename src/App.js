@@ -281,7 +281,7 @@ function App() {
 
       {currentPage === "admin" ? (
         <div>
-          <h1>인원 관리</h1>
+          <h1>인원 관리 V1</h1>
 
           <div
             style={{
